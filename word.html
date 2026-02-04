@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>单词对对碰｜传词库版</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+body {
+  background: linear-gradient(135deg, #f0f4ff, #d9e2ff);
+  min-height: 100vh;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.card {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 30, 80, 0.08);
+  width: 100%;
+  max-width: 720px;
+  padding: 22px 24px;
+  margin-bottom: 18px;
+}
+h2 {
+  font-size: 20px;
+  margin-bottom: 14px;
+  color: #1d2939;
+}
+.btn {
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: none;
+  background: #3b82f6;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+.btn:hover {
+  background: #2563eb;
+}
+.btn:disabled {
+  background: #c5cde2;
+  cursor: not-allowed;
+}
+.btn-red {
+  background: #ef4444;
+}
+.btn-red:hover {
+  background: #dc2626;
+}
+.btn-success {
+  background: #10b981;
+}
+.btn-success:hover {
+  background: #059669;
+}
+.btn-reset {
+  background: #f59e0b;
+}
+.btn-reset:hover {
+  background: #d97706;
+}
+.info {
+  font-size: 14px;
+  color: #4b5563;
+  margin: 6px 0;
+}
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.time {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ef4444;
+}
+.level-select {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+  margin-right: 8px;
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.word-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.word-box {
+  width: 49%;
+  min-height: 52px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 2px solid #e5e7eb;
+  background: #fafbfc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 15px;
+  cursor: pointer;
+  transition: 0.2s;
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.word-box.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+.word-box.matched {
+  border-color: #10b981;
+  background: #f0fdf4;
+  color: #065f46;
+  cursor: not-allowed;
+}
+.word-box.wrong {
+  border-color: #ef4444;
+  background: #fef2f2;
+  color: #dc2626;
+  animation: shake 0.4s;
+}
+@keyframes shake {
+  0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}50%{transform:translateX(4px);}75%{transform:translateX(-4px);}
+}
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  padding: 30px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+}
+#fileInput {
+  display: none;
+}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2>📚 单词对对碰</h2>
+  <button class="btn" id="selectFile">选择 Excel / CSV</button>
+  <input type="file" id="fileInput" accept=".xlsx,.csv">
+  <div class="info" id="fileTip">未选择文件</div>
+  <div class="info">总词数：<span id="totalWords">0</span>｜总关卡：<span id="totalLevels">0</span></div>
+  <div class="info" style="margin-top:10px">错词数：<span id="wrongCount" style="color:#ef4444;font-weight:600">0</span></div>
+
+  <div style="margin-top:16px;display:flex;align-items:center;flex-wrap:wrap;">
+    <span style="margin-right:10px; font-size:14px;">选择关卡：</span>
+    <select id="levelSelect" class="level-select" disabled></select>
+    <button class="btn btn-success" id="startSelected" disabled>开始所选关卡</button>
+    <button class="btn btn-reset" id="resetCurrent" disabled>重新开始本关</button>
+    <button class="btn btn-red" id="wrongPractice" disabled>错词重练</button>
+  </div>
+</div>
+
+<div class="card" id="gameBox" style="display:none;">
+  <div class="status-bar">
+    <div class="time" id="timeTxt">01:45</div>
+    <div id="levelTag" style="font-size:16px; font-weight:600;">关卡 1</div>
+    <div id="progressTxt" style="font-size:14px; color:#4b5563;">进度：0 / 100</div>
+  </div>
+
+  <div class="rows">
+    <div class="word-row"><div class="word-box en"></div><div class="word-box cn"></div></div>
+    <div class="word-row"><div class="word-box en"></div><div class="word-box cn"></div></div>
+    <div class="word-row"><div class="word-box en"></div><div class="word-box cn"></div></div>
+    <div class="word-row"><div class="word-box en"></div><div class="word-box cn"></div></div>
+    <div class="word-row"><div class="word-box en"></div><div class="word-box cn"></div></div>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h2 id="modalTitle"></h2>
+    <p style="margin:14px 0; color:#6b7280;" id="modalMsg"></p>
+    <button class="btn" id="modalClose">确定</button>
+  </div>
+</div>
+
+<script>
+const TIME_TOTAL = 105;
+const PAIR_PER_LEVEL = 100;
+
+let allWords = [];
+let totalLevels = 0;
+let currentLevel = 1;
+let levelWords = [];
+let queue = [];
+let done = 0;
+let timeLeft = TIME_TOTAL;
+let timer = null;
+
+let wrongSet = new Set();
+let wrongList = [];
+let isWrongMode = false;
+
+const fileInput = document.getElementById('fileInput');
+const selectFile = document.getElementById('selectFile');
+const fileTip = document.getElementById('fileTip');
+const totalWords = document.getElementById('totalWords');
+const totalLevelsEl = document.getElementById('totalLevels');
+const wrongCount = document.getElementById('wrongCount');
+const levelSelect = document.getElementById('levelSelect');
+const startSelected = document.getElementById('startSelected');
+const resetCurrent = document.getElementById('resetCurrent');
+const wrongPractice = document.getElementById('wrongPractice');
+const gameBox = document.getElementById('gameBox');
+const timeTxt = document.getElementById('timeTxt');
+const levelTag = document.getElementById('levelTag');
+const progressTxt = document.getElementById('progressTxt');
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const modalMsg = document.getElementById('modalMsg');
+const modalClose = document.getElementById('modalClose');
+
+const enBoxes = document.querySelectorAll('.word-box.en');
+const cnBoxes = document.querySelectorAll('.word-box.cn');
+
+selectFile.onclick = () => fileInput.click();
+
+fileInput.onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  fileTip.textContent = "正在读取：" + file.name;
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const wb = XLSX.read(ev.target.result);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, { header: ['en', 'cn'] });
+      const list = [];
+      json.forEach(row => {
+        if (!row || !row.en || !row.cn) return;
+        const en = String(row.en).trim();
+        const cn = String(row.cn).trim();
+        if (en && cn) list.push({ en, cn });
+      });
+      allWords = list;
+      totalWords.textContent = allWords.length;
+      totalLevels = Math.ceil(allWords.length / PAIR_PER_LEVEL);
+      totalLevelsEl.textContent = totalLevels;
+      fileTip.textContent = "已加载：" + file.name;
+
+      levelSelect.innerHTML = "";
+      for (let i = 1; i <= totalLevels; i++) {
+        const op = document.createElement("option");
+        op.value = i;
+        op.textContent = `第 ${i} 关`;
+        levelSelect.appendChild(op);
+      }
+      levelSelect.disabled = false;
+      startSelected.disabled = false;
+      resetCurrent.disabled = false;
+      wrongPractice.disabled = false;
+    } catch (e) {
+      fileTip.textContent = "解析失败";
+      alert("文件解析失败，请使用标准 xlsx / csv");
+    }
+  };
+  reader.readAsArrayBuffer(file);
+};
+
+// 开始选中关卡
+startSelected.onclick = () => {
+  if (allWords.length === 0) return alert("请先导入词库");
+  currentLevel = parseInt(levelSelect.value);
+  isWrongMode = false;
+  startLevel();
+};
+
+// 重新开始本关
+resetCurrent.onclick = () => {
+  if (!levelWords.length) return;
+  startLevel();
+};
+
+function startLevel() {
+  const from = (currentLevel - 1) * PAIR_PER_LEVEL;
+  levelWords = isWrongMode ? [...wrongList] : allWords.slice(from, from + PAIR_PER_LEVEL);
+  queue = [...levelWords];
+  done = 0;
+  timeLeft = TIME_TOTAL;
+
+  gameBox.style.display = "block";
+  clearInterval(timer);
+  initBoard();
+  updateUI();
+  bindClicks();
+  startTimer();
+}
+
+// 错词重练
+wrongPractice.onclick = () => {
+  if (wrongList.length === 0) return alert("暂无错词");
+  isWrongMode = true;
+  startLevel();
+};
+
+// 初始化面板（英文固定顺序）
+function initBoard() {
+  enBoxes.forEach(b => { b.className = "word-box en"; b.textContent = ""; b.dataset.cn = ""; });
+  cnBoxes.forEach(b => { b.className = "word-box cn"; b.textContent = ""; b.dataset.cn = ""; });
+
+  const take = Math.min(5, queue.length);
+  for (let i = 0; i < take; i++) {
+    const word = queue.shift();
+    enBoxes[i].textContent = word.en;
+    enBoxes[i].dataset.cn = word.cn;
+  }
+  shuffleCn();
+}
+
+// 只打乱右边中文
+function shuffleCn() {
+  const vis = Array.from(enBoxes).filter(x => x.textContent);
+  const cns = vis.map(x => x.dataset.cn);
+  cns.sort(() => Math.random() - 0.5);
+  vis.forEach((_, i) => {
+    const txt = cns[i];
+    const show = txt.length > 15 ? txt.substring(0, 15) + "…" : txt;
+    cnBoxes[i].textContent = show;
+    cnBoxes[i].dataset.cn = txt;
+    cnBoxes[i].className = "word-box cn";
+  });
+}
+
+// 答对后本行补新词
+function refillRow(idx) {
+  if (queue.length === 0) return;
+  const w = queue.shift();
+  const eb = enBoxes[idx];
+  eb.textContent = w.en;
+  eb.dataset.cn = w.cn;
+  eb.classList.remove("matched");
+  shuffleCn();
+}
+
+// 点击逻辑（答对后清除选中）
+function bindClicks() {
+  document.querySelectorAll(".word-box").forEach(box => {
+    box.onclick = () => {
+      if (box.classList.contains("matched")) return;
+      const isEn = box.classList.contains("en");
+      const list = isEn ? enBoxes : cnBoxes;
+      list.forEach(b => b.classList.remove("selected"));
+      box.classList.add("selected");
+
+      const se = document.querySelector(".word-box.en.selected");
+      const sc = document.querySelector(".word-box.cn.selected");
+      if (!se || !sc) return;
+
+      const real = se.dataset.cn;
+      const user = sc.dataset.cn;
+      const ok = real === user;
+
+      if (!ok) {
+        se.classList.add("wrong");
+        sc.classList.add("wrong");
+        const key = se.textContent;
+        if (!wrongSet.has(key)) { wrongSet.add(key); wrongList.push({en:key, cn:real}); wrongCount.textContent = wrongList.length; }
+        setTimeout(() => {
+          se.classList.remove("wrong");
+          sc.classList.remove("wrong");
+          se.classList.remove("selected");
+          sc.classList.remove("selected");
+        }, 1000);
+        return;
+      }
+
+      if (ok) {
+        se.classList.add("matched");
+        sc.classList.add("matched");
+
+        // 答对立刻清除蓝色选中框
+        se.classList.remove("selected");
+        sc.classList.remove("selected");
+
+        done++;
+        updateUI();
+        const idx = Array.from(enBoxes).indexOf(se);
+
+        if (done >= levelWords.length) {
+          clearInterval(timer); // 完成自动停钟
+          setTimeout(() => showModal(isWrongMode ? "错词重练完成 ✅" : `第 ${currentLevel} 关通关 🎉`, "很棒！"), 300);
+          return;
+        }
+
+        setTimeout(() => refillRow(idx), 300);
+      }
+    };
+  });
+}
+
+// 倒计时
+function startTimer() {
+  clearInterval(timer);
+  timer = setInterval(() => {
+    timeLeft--;
+    updateTime();
+    if (timeLeft <= 0) {
+      clearInterval(timer);
+      showModal("时间到 ⏰", "挑战失败");
+    }
+  }, 1000);
+}
+
+function updateTime() {
+  const m = String(Math.floor(timeLeft / 60)).padStart(2, '0');
+  const s = String(timeLeft % 60).padStart(2, '0');
+  timeTxt.textContent = `${m}:${s}`;
+}
+
+function updateUI() {
+  updateTime();
+  levelTag.textContent = isWrongMode ? "错词重练模式" : `第 ${currentLevel} 关`;
+  progressTxt.textContent = `进度：${done} / ${levelWords.length}`;
+}
+
+function showModal(title, msg) {
+  modalTitle.textContent = title;
+  modalMsg.textContent = msg;
+  modal.style.display = "flex";
+}
+modalClose.onclick = () => modal.style.display = "none";
+</script>
+</body>
+</html>
